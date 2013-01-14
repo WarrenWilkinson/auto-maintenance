@@ -1,0 +1,872 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+               "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<title>auto-maintenance</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+<meta name="title" content="auto-maintenance"/>
+<meta name="generator" content="Org-mode"/>
+<meta name="generated" content="2013-01-14T08:45-0700"/>
+<meta name="author" content="Warren Wilkinson"/>
+<meta name="description" content=""/>
+<meta name="keywords" content=""/>
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  html { font-family: Times, serif; font-size: 12pt; }
+  .title  { text-align: center; }
+  .todo   { color: red; }
+  .done   { color: green; }
+  .tag    { background-color: #add8e6; font-weight:normal }
+  .target { }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .right  {margin-left:auto; margin-right:0px;  text-align:right;}
+  .left   {margin-left:0px;  margin-right:auto; text-align:left;}
+  .center {margin-left:auto; margin-right:auto; text-align:center;}
+  p.verse { margin-left: 3% }
+  pre {
+	border: 1pt solid #AEBDCC;
+	background-color: #F3F5F7;
+	padding: 5pt;
+	font-family: courier, monospace;
+        font-size: 90%;
+        overflow:auto;
+  }
+  table { border-collapse: collapse; }
+  td, th { vertical-align: top;  }
+  th.right  { text-align:center;  }
+  th.left   { text-align:center;   }
+  th.center { text-align:center; }
+  td.right  { text-align:right;  }
+  td.left   { text-align:left;   }
+  td.center { text-align:center; }
+  dt { font-weight: bold; }
+  div.figure { padding: 0.5em; }
+  div.figure p { text-align: center; }
+  div.inlinetask {
+    padding:10px;
+    border:2px solid gray;
+    margin:10px;
+    background: #ffffcc;
+  }
+  textarea { overflow-x: auto; }
+  .linenr { font-size:smaller }
+  .code-highlighted {background-color:#ffff00;}
+  .org-info-js_info-navigation { border-style:none; }
+  #org-info-js_console-label { font-size:10px; font-weight:bold;
+                               white-space:nowrap; }
+  .org-info-js_search-highlight {background-color:#ffff00; color:#000000;
+                                 font-weight:bold; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012  Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+
+</head>
+<body>
+
+<div id="preamble">
+
+</div>
+
+<div id="content">
+<h1 class="title">auto-maintenance</h1>
+
+
+
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#sec-1">1 Rationale</a></li>
+<li><a href="#sec-2">2 Quick Start</a></li>
+<li><a href="#sec-3">3 Data-Model</a></li>
+<li><a href="#sec-4">4 Data-Model Tests</a>
+<ul>
+<li><a href="#sec-4-1">4.1 Can Create Vehicles</a></li>
+<li><a href="#sec-4-2">4.2 Can Get Vehicle by ID</a></li>
+<li><a href="#sec-4-3">4.3 Can Delete Vehicle</a></li>
+<li><a href="#sec-4-4">4.4 Can Perform Operation</a></li>
+<li><a href="#sec-4-5">4.5 Cannot Gas Electric Car</a></li>
+<li><a href="#sec-4-6">4.6 Can Delete Operation</a></li>
+<li><a href="#sec-4-7">4.7 Deleting Car Deletes Operations</a></li>
+<li><a href="#sec-4-8">4.8 API uses IDs and Nothing Else</a></li>
+</ul>
+</li>
+<li><a href="#sec-5">5 Application</a></li>
+<li><a href="#sec-6">6 start.lisp</a></li>
+<li><a href="#sec-7">7 License</a></li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-1" class="outline-2">
+<h2 id="sec-1"><span class="section-number-2">1</span> Rationale</h2>
+<div class="outline-text-2" id="text-1">
+
+
+<p>
+This is a solution for a programming test. The test is making a application for tracking automobile maintenance
+that supports a web &amp; console interface.
+</p>
+<p>
+To help the evaluator, I've tried to minimize external dependencies and
+set the system up to download, compile and install those dependencies.
+</p>
+<p>
+This means I don't depend on Apache nor PostgreSQL&hellip; as a result, my
+objects are not persisted. Please don't hold this against me.  I can provide persistence
+code, if the evaluator wants to spend time setting up a PostgreSQL database to persist against.
+</p>
+<p>
+I have not provided a command line interface &ndash; <a href="http://common-lisp.net/project/slime/">Slime</a> (and the lisp REPL) renders that redundant.
+But there are unit tests and a web interface.
+</p>
+</div>
+
+</div>
+
+<div id="outline-container-2" class="outline-2">
+<h2 id="sec-2"><span class="section-number-2">2</span> Quick Start</h2>
+<div class="outline-text-2" id="text-2">
+
+
+<p>
+<i>Start the web interface with this command:</i>
+</p>
+
+
+<pre class="example">sbcl --no-userinit --no-sysinit --load "start.lisp" 
+</pre>
+
+
+<p>
+It will:
+</p><ol>
+<li>download dependencies, 
+</li>
+<li>compile them,
+</li>
+<li>compile the application,
+</li>
+<li>start a web server.
+</li>
+</ol>
+
+
+<p>
+Assuming no errors, *Open your browser <a href="http://127.0.0.1:8080">http://127.0.0.1:8080</a>*
+If there were errors, get in touch: <a href="mailto:warrenwilkinson@gmail.com">mailto:warrenwilkinson@gmail.com</a>
+</p>
+<p>
+<i>You can run the tests with</i>
+</p>
+
+
+<pre class="example">sbcl --no-userinit --no-sysinit --load "test.lisp" 
+</pre>
+
+
+<p>
+This will download dependencies (including the test framework), compile them, etc&hellip;
+</p>
+</div>
+
+</div>
+
+<div id="outline-container-3" class="outline-2">
+<h2 id="sec-3"><span class="section-number-2">3</span> Data-Model</h2>
+<div class="outline-text-2" id="text-3">
+
+
+
+
+<p>
+<img src="data-model.png"  alt="data-model.png" />
+</p>
+
+<p>
+<b>Description:</b>
+</p>
+<p>
+"The system should support at least three car types: electric, gas and diesel. Each vehicle should have at minimum a make, model, year and odometer reading. Maintenance tasks should include 2-3 things like oil changes or tire rotations. However, not all maintenance tasks can be applied to all vehicles (an electric car won’t need an oil change)."
+</p>
+<p>
+A breakdown like this perhaps?
+</p>
+
+
+<p>
+<img src="class-layout.png"  alt="class-layout.png" />
+</p>
+<p>
+This breakdown says automobiles have a model, a year, an odometer reading and a type &mdash; and <i>type</i> is the most important!
+It works here, because most of our operations specialize on the automobile type. But it could be wrong if someone was
+concerned with ordering parts for cars &mdash; in this case, manufacturer might be more important. But that's a problem
+we don't have.
+</p>
+
+
+
+<pre class="example">(defvar *serial* 0)
+(deftype id () `(integer 0 ,most-positive-fixnum))
+
+(defclass automobile ()
+  ((id       :initform (incf *serial*) :reader id :type 'id)
+   (model    :initarg :model    :accessor model)
+   (year     :initarg :year     :accessor year)
+   (odometer :initarg :odometer :accessor odometer)))
+
+(defclass gas-auto (automobile) ())
+(defclass electric-auto (automobile) ())
+(defclass diesel-auto (automobile) ())
+
+</pre>
+
+
+<p>
+The next task is operations on cars.  In Lisp that's easy because we have multimethods, we can write something like this:
+</p>
+
+
+
+<pre class="example">(defclass operation   () 
+  ((id       :initform (incf *serial*) :reader id)))
+(defclass oil-change  (operation) ())
+(defclass tire-change (operation) ())
+(defmethod perform (operation automobile)
+   (format t "~%Performing ~a on ~a" operation automobile))
+(defmethod perform ((op oil-change) (g electric-auto))
+   (error "You can't change the gas on an electric car."))
+</pre>
+
+
+<p>
+Since our application is supposed to track the changes, the simplist way is to just add them onto a maintenance
+log.  I've deliberately kept the association of operations and automobiles outside of both classes. 
+The reason is so that this association could easily be serialized (e.g. to a database or file).
+</p>
+
+
+
+<pre class="example">(defmethod perform :around (operation automobile)
+   (prog1 (call-next-method)
+          (push operation (gethash automobile *operations*))))
+</pre>
+
+
+<p>
+And to complete our API, we need a way to access <b>operations</b> and create instances of our objects.  Generally, the API
+uses <i>IDs</i> for everything.  This makes it easy to pass objects around as HTTP get parameters, and makes our library easy
+to port to a database without changing the API.
+</p>
+
+
+
+<pre class="example">(defun make-automobile (type &amp;rest args &amp;key model year odometer)
+  (declare (ignore model year odometer))
+  (let ((car (apply #'make-instance type args)))
+    (setf (gethash car *operations*) nil)
+    car))
+
+(defun all-cars (&amp;aux (store nil))
+  "Returns all car objects"
+  (maphash #'(lambda (k v) (declare (ignore v)) (push k store)) *operations*)
+  store)
+
+(defun get-car (id) 
+  "Returns the car object with the corresponding ID"
+  (declare (type id id))
+  (find id (all-cars) :key #'id))
+
+(defun delete-automobile (id)
+  "Deletes the car object with the corresponding ID."
+  (declare (type id id))
+  (remhash (get-car id) *operations*))
+
+(defun operations-on (id)
+  "Fetches all operations performed on car with ID"
+  (declare (type id id))
+  (gethash (get-car id) *operations*))
+
+(defun delete-operation (id)
+  "Delete operation with the correspondind ID"
+  (declare (type id id))
+  (maphash #'(lambda (k v) (setf (gethash k *operations*) (remove id v :key #'id)))
+           *operations*))
+
+</pre>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-4" class="outline-2">
+<h2 id="sec-4"><span class="section-number-2">4</span> Data-Model Tests</h2>
+<div class="outline-text-2" id="text-4">
+
+
+
+<p>
+<img src="data-model-tests.png"  alt="data-model-tests.png" />
+</p>
+<p>
+Tests can be run with
+</p>
+
+
+<pre class="example">sbcl --no-userinit --no-sysinit --load "test.lisp" 
+</pre>
+
+
+
+</div>
+
+<div id="outline-container-4-1" class="outline-3">
+<h3 id="sec-4-1"><span class="section-number-3">4.1</span> Can Create Vehicles</h3>
+<div class="outline-text-3" id="text-4-1">
+
+
+<p>
+Test that we can create the three different vehicle types. Just a sanity check really.
+</p>
+
+
+
+<pre class="example">(deftest can-create-vehicles ()
+   (let ((gas    (make-automobile 'gas-auto :model "gas"))
+         (elec   (make-automobile 'electric-auto :model "electric"))
+         (diesel (make-automobile 'diesel-auto :model "diesel")))
+     (is (not (null gas)))
+     (is (not (null elec)))
+     (is (not (null diesel)))))
+</pre>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-4-2" class="outline-3">
+<h3 id="sec-4-2"><span class="section-number-3">4.2</span> Can Get Vehicle by ID</h3>
+<div class="outline-text-3" id="text-4-2">
+
+
+<p>
+Test that fetching a vehicle by ID returns the correct vehicle.
+</p>
+
+
+
+<pre class="example">(deftest can-get-vehicle-by-id ()
+  (let ((car1  (make-automobile 'gas-auto :model "gas"))
+        (car2  (make-automobile 'electric-auto :model "gas")))
+    (is (eq (get-car (id car1)) car1))
+    (is (eq (get-car (id car2)) car2))))
+</pre>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-4-3" class="outline-3">
+<h3 id="sec-4-3"><span class="section-number-3">4.3</span> Can Delete Vehicle</h3>
+<div class="outline-text-3" id="text-4-3">
+
+
+<p>
+Test that a vehicle can be deleted, and once deleted can no longer be fetched.
+</p>
+
+
+
+<pre class="example">(deftest can-delete-vehicle ()
+  (let* ((car1  (make-automobile 'gas-auto :model "gas"))
+         (id1 (id car1))
+         (car2  (make-automobile 'electric-auto :model "gas")))
+    (delete-automobile id1)
+    (is (null (get-car id1)))
+    (is (eq (get-car (id car2)) car2))))
+</pre>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-4-4" class="outline-3">
+<h3 id="sec-4-4"><span class="section-number-3">4.4</span> Can Perform Operation</h3>
+<div class="outline-text-3" id="text-4-4">
+
+
+<p>
+Test that operations can be performed, at least for simple operations
+that should succeed.
+</p>
+
+
+
+<pre class="example">(deftest can-perform-operation ()
+  (let ((car1  (make-automobile 'gas-auto :model "gas"))
+        (car2  (make-automobile 'gas-auto :model "gas"))
+        (op (make-instance 'tire-change)))
+    (finishes (perform op car1))
+    (is (member op (operations-on (id car1))))
+    (is (not (member op (operations-on (id car2)))))))
+</pre>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-4-5" class="outline-3">
+<h3 id="sec-4-5"><span class="section-number-3">4.5</span> Cannot Gas Electric Car</h3>
+<div class="outline-text-3" id="text-4-5">
+
+
+<p>
+Test that we cannot put gas into an electric car.
+</p>
+
+
+
+<pre class="example">(deftest cannot-gas-electric-car ()
+  (let ((gas  (make-automobile 'gas-auto))
+        (electric  (make-automobile 'electric-auto))
+        (oil-change (make-instance 'oil-change)))
+    (signals error (perform oil-change electric))
+    (finishes (perform oil-change gas))))
+</pre>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-4-6" class="outline-3">
+<h3 id="sec-4-6"><span class="section-number-3">4.6</span> Can Delete Operation</h3>
+<div class="outline-text-3" id="text-4-6">
+
+
+<p>
+Test that we can delete operations. And once deleted, the operation
+should not appear in any cars operations list.
+</p>
+
+
+
+<pre class="example">(deftest can-delete-operation ()
+  (let ((gas  (make-automobile 'gas-auto))
+        (diesel (make-automobile 'diesel-auto))
+        (tire-change (make-instance 'tire-change))
+        (oil-change (make-instance 'oil-change)))
+
+    (finishes (perform oil-change gas))
+    (finishes (perform oil-change diesel))  ;; Same op can be applied to many vehicles
+    (finishes (perform tire-change gas))    ;; API doesn't restrict this at low levels
+    (is (member tire-change (operations-on (id gas))))
+    (is (member oil-change (operations-on (id diesel))))
+    (is (member oil-change (operations-on (id gas))))
+
+    (finishes (delete-operation (id tire-change)))
+    (is (not (member tire-change (operations-on (id gas)))))
+    (is (member oil-change (operations-on (id diesel))))
+    (is (member oil-change (operations-on (id gas))))
+
+    (finishes (delete-operation (id oil-change)))
+    (finishes (delete-operation (id tire-change))) ;; Deleting already-deleted things
+    (is (null (operations-on (id gas))))           ;; is a no-op. 
+    (is (null (operations-on (id diesel))))))      ;; Deletion removes operation
+                                                   ;; from all cars.
+
+
+
+
+</pre>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-4-7" class="outline-3">
+<h3 id="sec-4-7"><span class="section-number-3">4.7</span> Deleting Car Deletes Operations</h3>
+<div class="outline-text-3" id="text-4-7">
+
+
+<p>
+Test that deleted cars have no operations, but the operations
+were not deleted if they were shared.
+</p>
+
+
+
+<pre class="example">(deftest deleting-car-deletes-operations ()
+  (let ((gas  (make-automobile 'gas-auto))
+        (diesel (make-automobile 'diesel-auto))
+        (tire-change (make-instance 'tire-change))
+        (oil-change (make-instance 'oil-change)))
+
+    (finishes (perform oil-change gas))
+    (finishes (perform oil-change diesel))  ;; Same op can be applied to many vehicles
+    (finishes (perform tire-change gas))    ;; API doesn't restrict this at low levels
+
+    (is (member tire-change (operations-on (id gas))))
+    (is (member oil-change (operations-on (id diesel))))
+    (is (member oil-change (operations-on (id gas))))
+
+    (delete-automobile (id gas))
+    (is (null (operations-on (id gas))))  ;; Deleted vehicles have no operations.
+    (is (member oil-change (operations-on (id diesel)))))) ;; But it didn't
+                                                           ;; delete shared ops.
+
+</pre>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-4-8" class="outline-3">
+<h3 id="sec-4-8"><span class="section-number-3">4.8</span> API uses IDs and Nothing Else</h3>
+<div class="outline-text-3" id="text-4-8">
+
+
+<p>
+Ensure the API uses IDs and passing the wrong type signals
+an error. This behavior helps end users avoid having 
+(delete-car my-actual-object) somewhere deep in their code that's
+acting like a no-op.
+</p>
+
+
+
+<pre class="example">(deftest api-uses-ids-and-nothing-else ()
+  (let ((car1  (make-automobile 'gas-auto :model "gas"))
+        (op (make-instance 'tire-change)))
+
+    ;; Perform and Make-automobile use the actual objects.
+    ;; Rest of API uses IDs.
+    ;; Rationale: Operation doesn't exist until performed,
+    ;; Thus perform method should save it.
+    ;; And we'd be DB backed, so it makes sense to 
+    ;; pass IDs rather than objects.
+    (finishes (perform op car1)) 
+
+    (signals type-error (get-car car1))
+    (finishes (get-car (id car1)))
+
+    (signals type-error (operations-on car1))
+    (finishes (operations-on (id car1)))
+
+    (signals type-error (delete-automobile car1))
+    (signals type-error (delete-automobile "string"))
+    (signals type-error (delete-automobile 'car1))
+    (finishes (delete-automobile (id car1)))))
+</pre>
+
+
+</div>
+</div>
+
+</div>
+
+<div id="outline-container-5" class="outline-2">
+<h2 id="sec-5"><span class="section-number-2">5</span> Application</h2>
+<div class="outline-text-2" id="text-5">
+
+
+
+
+<p>
+<img src="application.png"  alt="application.png" />
+</p>
+<p>
+The application provides HTTP service using <a href="http://weitz.de/hunchentoot/">hunchentoot</a>. <a href="http://common-lisp.net/project/slime/">Slime</a> is also started.
+The web service is just a simple RESTful thing.  The first page is the index.
+</p>
+
+
+
+<pre class="example">(defun print-car-row (stream car)
+  (with-html-output (stream stream)
+    (:tr 
+     (:td (:a :href (format nil "/delete?id=~a" (id car))
+              "X") "&amp;nbsp;&amp;nbsp;&amp;nbsp;")
+     (:td (:a :href (format nil "/car?id=~a" (id car))
+              (str (class-name (class-of car)))))
+     (:td (str (model car)))
+     (:td (str (year car)))
+     (:td (str (odometer car))))))
+
+(define-easy-handler (index :uri "/") ()
+  (with-html-output-to-string (stream nil :prologue t)
+    (:html 
+     (:head (:title "Auto-Maintenance"))
+     (:body 
+      (:h1 "Auto-Maintenance")
+      (:p "Welcome to auto maintenance.")
+      (:hr)
+      (:h2 "Add New Car")
+      (:form :method "post" :action "/newcar"
+        (:dl (:dt (:label :for "model"    "Model"))
+             (:dd (:input :type "text" :name "model"))
+
+             (:dt (:label :for "year"     "Year")) 
+             (:dd (:input :type "text" :name "year"))
+
+             (:dt (:label :for "odometer" "Odometer")) 
+             (:dd (:input :type "text" :name "odometer"))
+
+             (:dt (:label :for "type" "type")
+                  (:dd
+                   (:input :type "radio" :id "gas" :name "type"
+                           :value "GAS-AUTO" :checked "t") 
+                   (:label :for "gas" "Gas") (:br)
+
+                   (:input :type "radio" :id "electric" 
+                           :name "type" :value "ELECTRIC-AUTO") 
+                   (:label :for "electric" "Electric") (:br)
+
+                   (:input :type "radio" :id "diesel" 
+                           :name "type" :value "DIESEL-AUTO")
+                   (:label :for "diesel" "Diesel") (:br))))
+        (:input :type "submit"))
+      (:p "The following cars are defined:")
+      (:table
+       (:thead (:tr (:th) (:th "Type") (:th "Model")
+                    (:th "Year") (:th "Odometer")))
+       (:tbody (dolist (car (all-cars))
+                 (print-car-row stream car))))))))
+
+</pre>
+
+
+<p>
+To make the form work, we need a postback handler. 
+</p>
+
+
+
+<pre class="example">(define-easy-handler (newcar :uri "/newcar")
+    ((model :init-form "Unnamed"  :parameter-type 'string)
+     (year                        :parameter-type 'integer)
+     (Odometer                    :parameter-type 'integer)
+     (type  :init-form "GAS-AUTO" :parameter-type 'string))
+  (make-automobile (find-symbol type :data-model)
+                   :model model :year year :odometer odometer)
+  (redirect "/"))
+</pre>
+
+
+<p>
+This URL can delete cars.
+</p>
+
+
+
+<pre class="example">(define-easy-handler (deletecar :uri "/delete")
+    ((id :parameter-type 'integer))
+  (and id (delete-automobile id))
+  (redirect "/"))
+</pre>
+
+
+<p>
+While this one can view them, and let you delete or add operations to the vehicle.
+</p>
+
+
+
+<pre class="example">(define-easy-handler (viewcar :uri "/car")
+    ((id  :parameter-type 'integer)
+     (msg :parameter-type 'string))
+  (unless id (redirect "/"))
+  (let ((car (get-car id)))
+    (with-html-output-to-string (stream nil :prologue t)
+      (:html 
+       (:head (:title "Auto-Maintenance"))
+       (:body 
+        (:h1 "Car " (str id) ": " (str (class-name (class-of car))))
+        (when msg (htm (:b (esc (url-decode msg)))))
+        (:hr)
+        (:a :href "/" "back") (:br)
+        (:h2 "Operations")
+        (:a :href (format nil "/oilchange?id=~d" id) "Oil Change") (:br)
+        (:a :href (format nil "/tirechange?id=~d" id) "Tire Change") (:br)
+        (:br)          
+        (:ol (dolist (op (operations-on (id car)))
+               (htm (:li (:a :href (format nil "/delete-operation?id=~d&amp;car=~d"
+                                           (id op) (id car)) "X") 
+                         "&amp;nbsp;&amp;nbsp;"
+                         (esc (princ-to-string op)))))))))))
+
+(defun do-operation (op car)
+  (url-encode (with-output-to-string (*standard-output*)
+                (handler-case (perform op car)
+                  (error (e) (princ e))))))
+
+(define-easy-handler (oilchange :uri "/oilchange")
+    ((id :parameter-type 'integer))
+  (unless id (redirect "/"))
+  (let* ((car (get-car id))
+         (msg (do-operation (make-instance 'oil-change) car)))
+    (redirect (format nil "/car?id=~d&amp;msg=~a" id msg))))
+
+(define-easy-handler (tirechange :uri "/tirechange")
+    ((id :parameter-type 'integer))
+  (unless id (redirect "/"))
+  (let* ((car (get-car id))
+         (msg (do-operation (make-instance 'tire-change) car)))
+    (redirect (format nil "/car?id=~d&amp;msg=~a" id msg))))
+
+</pre>
+
+
+<p>
+And one last URL to delete an operation.
+</p>
+
+
+
+<pre class="example">(define-easy-handler (del-operation :uri "/delete-operation")
+    ((id  :parameter-type 'integer)
+     (car :parameter-type 'integer))
+  (when id (delete-operation id))
+  (redirect (if car (format nil "/car?id=~d&amp;msg=operation%20deleted" car) "/")))
+</pre>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-6" class="outline-2">
+<h2 id="sec-6"><span class="section-number-2">6</span> start.lisp</h2>
+<div class="outline-text-2" id="text-6">
+
+
+<p>
+To hasten deployment, this program downloads its external dependencies. This is done using two lisp packages:
+</p>
+<dl>
+<dt><a href="http://common-lisp.net/~mmommer/asdf-howto.shtml">ASDF</a></dt><dd>'A System Definition Facilty.' lets me express package interdependencies like you might find in a makefile.
+</dd>
+<dt><a href="http://www.quicklisp.org/beta/">Quicklisp</a></dt><dd>A program for fetching Lisp packages from the internet.
+</dd>
+</dl>
+
+
+<p>
+This is bootstrapping. Because we have nothing, we can't start calling ASDF or QUICKLOAD methods (because they don't exist).
+Every function call requires us to first locate the function in the newly loaded package and then call it.
+</p>
+<p>
+In C# or Java, you'd reach for reflection libraries and a bottle of Aspirin. Lisp offers us an easy way:  Because the compiler is ever-present, we can compile new code at runtime rather
+than write code that does lookup-then-call behavior.  And that's what the <b>eval</b> statements are doing.
+</p>
+<p>
+Finally, we jump into our read program start point, safe in the knowledge that all dependencies have been met.
+</p>
+
+
+
+<pre class="example">(format t "~%Downloading required dependencies...~%")
+
+;; Load quicklisp
+(load "quicklisp" :if-does-not-exist :error)
+(eval `(handler-bind ((error
+                       #'(lambda (e)
+                           (declare (ignore e))
+                           (invoke-restart 'quicklisp-quickstart::load-setup))))
+         (quicklisp-quickstart::install)))
+
+;; Now that it's ready, use ASDF to load our program, 
+;; and quicklisp to download missing dependencies.
+(eval `(handler-bind ((asdf::missing-dependency
+                       #'(lambda (e)
+                           (quicklisp:quickload (slot-value e 'asdf::requires))
+                           (invoke-restart 'asdf::retry))))
+         (asdf:oos 'asdf:load-op :auto-maintenance)))
+
+(format t "~%All dependencies loaded... Running program.")
+(funcall (find-symbol "MAIN" :auto-maintenance))
+</pre>
+
+
+<p>
+The file, test.lisp, is pretty identical to this one. Except it runs the tests and quits.
+</p>
+</div>
+
+</div>
+
+<div id="outline-container-7" class="outline-2">
+<h2 id="sec-7"><span class="section-number-2">7</span> License</h2>
+<div class="outline-text-2" id="text-7">
+
+
+<p>
+auto-maintenance is distributed under the <a href="http://opensource.org/licenses/lgpl-2.1.php">LGPL2</a> License. 
+</p>
+</div>
+</div>
+</div>
+
+<div id="postamble">
+<p class="date">Date: 2013-01-14T08:45-0700</p>
+<p class="author">Author: Warren Wilkinson</p>
+<p class="creator"><a href="http://orgmode.org">Org</a> version 7.9.2 with <a href="http://www.gnu.org/software/emacs/">Emacs</a> version 24</p>
+<a href="http://validator.w3.org/check?uri=referer">Validate XHTML 1.0</a>
+
+</div>
+</body>
+</html>
