@@ -1,0 +1,794 @@
+#+TITLE: auto-maintenance
+#+author: Warren Wilkinson
+#+email: warrenwilkinson@gmail.com
+
+# Repository: https://github.com/WarrenWilkinson/car-db
+
+* Rationale
+
+This is a solution for a programming test. The test is making a application for tracking automobile maintenance
+that supports a web & console interface.
+
+To help the evaluator, I've tried to minimize external dependencies and
+set the system up to download, compile and install those dependencies.
+
+This means I don't depend on Apache nor PostgreSQL... as a result, my
+objects are not persisted. Please don't hold this against me.  I can provide persistence
+code, if the evaluator wants to spend time setting up a PostgreSQL database to persist against.
+
+I have not provided a command line interface -- [[http://common-lisp.net/project/slime/][Slime]] (and the lisp REPL) renders that redundant.
+But there are unit tests and a web interface.
+
+* Quick Start
+
+/Start the web interface with this command:/
+#+begin_src sh
+sbcl --no-userinit --no-sysinit --load "start.lisp" 
+#+end_src 
+
+It will:
+  1. download dependencies, 
+  2. compile them,
+  3. compile the application,
+  4. start a web server.
+
+Assuming no errors, *Open your browser [[http://127.0.0.1:8080]]*
+If there were errors, get in touch: [[mailto:warrenwilkinson@gmail.com]]
+
+/You can run the tests with/
+#+begin_src sh
+sbcl --no-userinit --no-sysinit --load "test.lisp" 
+#+end_src 
+
+This will download dependencies (including the test framework), compile them, etc...
+
+* Data-Model
+
+#+ATTR_LaTeX: width=3cm
+#+begin_src ditaa :file data-model.png :cmdline -r
+  +----------------+ 
+  |                | 
+  | 1. Data Model  | 
+  | cRED           | 
+  +-------+--------+ 
+          |          
+          V          
+  +-------+--------+
+  |                |
+  | 2. Application |
+  |                |
+  +----------------+
+#+end_src
+
+
+*Description:*
+
+"The system should support at least three car types: electric, gas and diesel. Each vehicle should have at minimum a make, model, year and odometer reading. Maintenance tasks should include 2-3 things like oil changes or tire rotations. However, not all maintenance tasks can be applied to all vehicles (an electric car won’t need an oil change)."
+
+A breakdown like this perhaps?
+
+#+begin_src ditaa  :file class-layout.png :cmdline -r
+                  +------------+
+       +----------+ AUTOMOBILE +-------+
+       |          +------+-----+       |
+       |                 |             |
+       |                 |             |
+       V                 V             V
+   +---+---+      +------+---+    +----+----+
+   |  GAS  |      | ELECTRIC |    |  DIESEL |
+   +-------+      +----------+    +---------+
+#+end_src
+
+This breakdown says automobiles have a model, a year, an odometer reading and a type --- and /type/ is the most important!
+It works here, because most of our operations specialize on the automobile type. But it could be wrong if someone was
+concerned with ordering parts for cars --- in this case, manufacturer might be more important. But that's a problem
+we don't have.
+
+#+name: automobile
+#+begin_src lisp
+  (defvar *serial* 0)
+  (deftype id () `(integer 0 ,most-positive-fixnum))
+  
+  (defclass automobile ()
+    ((id       :initform (incf *serial*) :reader id :type 'id)
+     (model    :initarg :model    :accessor model)
+     (year     :initarg :year     :accessor year)
+     (odometer :initarg :odometer :accessor odometer)))
+  
+  (defclass gas-auto (automobile) ())
+  (defclass electric-auto (automobile) ())
+  (defclass diesel-auto (automobile) ())
+  
+#+end_src
+
+The next task is operations on cars.  In Lisp that's easy because we have multimethods, we can write something like this:
+
+#+name: operation
+#+begin_src lisp
+   (defclass operation   () 
+     ((id       :initform (incf *serial*) :reader id)))
+   (defclass oil-change  (operation) ())
+   (defclass tire-change (operation) ())
+   (defmethod perform (operation automobile)
+      (format t "~%Performing ~a on ~a" operation automobile))
+   (defmethod perform ((op oil-change) (g electric-auto))
+      (error "You can't change the gas on an electric car."))
+#+end_src
+
+Since our application is supposed to track the changes, the simplist way is to just add them onto a maintenance
+log.  I've deliberately kept the association of operations and automobiles outside of both classes. 
+The reason is so that this association could easily be serialized (e.g. to a database or file).
+
+#+name: around-operation
+#+begin_src lisp   
+   (defmethod perform :around (operation automobile)
+      (prog1 (call-next-method)
+             (push operation (gethash automobile *operations*))))
+#+end_src
+
+And to complete our API, we need a way to access *operations* and create instances of our objects.  Generally, the API
+uses /IDs/ for everything.  This makes it easy to pass objects around as HTTP get parameters, and makes our library easy
+to port to a database without changing the API.
+
+#+name: more-api
+#+begin_src lisp   
+  (defun make-automobile (type &rest args &key model year odometer)
+    (declare (ignore model year odometer))
+    (let ((car (apply #'make-instance type args)))
+      (setf (gethash car *operations*) nil)
+      car))
+  
+  (defun all-cars (&aux (store nil))
+    "Returns all car objects"
+    (maphash #'(lambda (k v) (declare (ignore v)) (push k store)) *operations*)
+    store)
+  
+  (defun get-car (id) 
+    "Returns the car object with the corresponding ID"
+    (declare (type id id))
+    (find id (all-cars) :key #'id))
+  
+  (defun delete-automobile (id)
+    "Deletes the car object with the corresponding ID."
+    (declare (type id id))
+    (remhash (get-car id) *operations*))
+  
+  (defun operations-on (id)
+    "Fetches all operations performed on car with ID"
+    (declare (type id id))
+    (gethash (get-car id) *operations*))
+  
+  (defun delete-operation (id)
+    "Delete operation with the correspondind ID"
+    (declare (type id id))
+    (maphash #'(lambda (k v) (setf (gethash k *operations*) (remove id v :key #'id)))
+             *operations*))
+  
+#+end_src
+
+* Data-Model Tests
+#+ATTR_LaTeX: width=5cm
+#+begin_src ditaa :file data-model-tests.png :cmdline -r
+  +----------------+      +------------+
+  |                |      |            |
+  | 1. Data Model  +<-=---+  Tests     |
+  |                |      |  cRED      |
+  +-------+--------+      +------------+
+          |          
+          V          
+  +-------+--------+
+  |                |
+  | 2. Application |
+  |                |
+  +----------------+
+#+end_src
+
+Tests can be run with
+#+begin_src sh
+sbcl --no-userinit --no-sysinit --load "test.lisp" 
+#+end_src 
+
+** Can Create Vehicles
+
+Test that we can create the three different vehicle types. Just a sanity check really.
+
+#+name: can-create-vehicles
+#+begin_src lisp
+  (deftest can-create-vehicles ()
+     (let ((gas    (make-automobile 'gas-auto :model "gas"))
+           (elec   (make-automobile 'electric-auto :model "electric"))
+           (diesel (make-automobile 'diesel-auto :model "diesel")))
+       (is (not (null gas)))
+       (is (not (null elec)))
+       (is (not (null diesel)))))
+#+end_src 
+
+** Can Get Vehicle by ID
+
+Test that fetching a vehicle by ID returns the correct vehicle.
+
+#+name: can-get-vehicle-by-id
+#+begin_src lisp
+  (deftest can-get-vehicle-by-id ()
+    (let ((car1  (make-automobile 'gas-auto :model "gas"))
+          (car2  (make-automobile 'electric-auto :model "gas")))
+      (is (eq (get-car (id car1)) car1))
+      (is (eq (get-car (id car2)) car2))))
+#+end_src 
+
+** Can Delete Vehicle
+
+Test that a vehicle can be deleted, and once deleted can no longer be fetched.
+
+#+name: can-delete-vehicle
+#+begin_src lisp
+  (deftest can-delete-vehicle ()
+    (let* ((car1  (make-automobile 'gas-auto :model "gas"))
+           (id1 (id car1))
+           (car2  (make-automobile 'electric-auto :model "gas")))
+      (delete-automobile id1)
+      (is (null (get-car id1)))
+      (is (eq (get-car (id car2)) car2))))
+#+end_src 
+
+** Can Perform Operation
+
+Test that operations can be performed, at least for simple operations
+that should succeed.
+
+#+name: can-perform-operation
+#+begin_src lisp
+  (deftest can-perform-operation ()
+    (let ((car1  (make-automobile 'gas-auto :model "gas"))
+          (car2  (make-automobile 'gas-auto :model "gas"))
+          (op (make-instance 'tire-change)))
+      (finishes (perform op car1))
+      (is (member op (operations-on (id car1))))
+      (is (not (member op (operations-on (id car2)))))))
+#+end_src 
+
+** Cannot Gas Electric Car
+
+Test that we cannot put gas into an electric car.
+
+#+name: can-not-gas-electric-car
+#+begin_src lisp
+  (deftest cannot-gas-electric-car ()
+    (let ((gas  (make-automobile 'gas-auto))
+          (electric  (make-automobile 'electric-auto))
+          (oil-change (make-instance 'oil-change)))
+      (signals error (perform oil-change electric))
+      (finishes (perform oil-change gas))))
+#+end_src 
+
+** Can Delete Operation
+
+Test that we can delete operations. And once deleted, the operation
+should not appear in any cars operations list.
+
+#+name: can-delete-operation
+#+begin_src lisp
+  (deftest can-delete-operation ()
+    (let ((gas  (make-automobile 'gas-auto))
+          (diesel (make-automobile 'diesel-auto))
+          (tire-change (make-instance 'tire-change))
+          (oil-change (make-instance 'oil-change)))
+  
+      (finishes (perform oil-change gas))
+      (finishes (perform oil-change diesel))  ;; Same op can be applied to many vehicles
+      (finishes (perform tire-change gas))    ;; API doesn't restrict this at low levels
+      (is (member tire-change (operations-on (id gas))))
+      (is (member oil-change (operations-on (id diesel))))
+      (is (member oil-change (operations-on (id gas))))
+     
+      (finishes (delete-operation (id tire-change)))
+      (is (not (member tire-change (operations-on (id gas)))))
+      (is (member oil-change (operations-on (id diesel))))
+      (is (member oil-change (operations-on (id gas))))
+  
+      (finishes (delete-operation (id oil-change)))
+      (finishes (delete-operation (id tire-change))) ;; Deleting already-deleted things
+      (is (null (operations-on (id gas))))           ;; is a no-op. 
+      (is (null (operations-on (id diesel))))))      ;; Deletion removes operation
+                                                     ;; from all cars.
+     
+     
+    
+  
+#+end_src 
+
+** Deleting Car Deletes Operations
+
+Test that deleted cars have no operations, but the operations
+were not deleted if they were shared.
+
+#+name: deleting-car-deletes-operations
+#+begin_src lisp
+  (deftest deleting-car-deletes-operations ()
+    (let ((gas  (make-automobile 'gas-auto))
+          (diesel (make-automobile 'diesel-auto))
+          (tire-change (make-instance 'tire-change))
+          (oil-change (make-instance 'oil-change)))
+    
+      (finishes (perform oil-change gas))
+      (finishes (perform oil-change diesel))  ;; Same op can be applied to many vehicles
+      (finishes (perform tire-change gas))    ;; API doesn't restrict this at low levels
+  
+      (is (member tire-change (operations-on (id gas))))
+      (is (member oil-change (operations-on (id diesel))))
+      (is (member oil-change (operations-on (id gas))))
+  
+      (delete-automobile (id gas))
+      (is (null (operations-on (id gas))))  ;; Deleted vehicles have no operations.
+      (is (member oil-change (operations-on (id diesel)))))) ;; But it didn't
+                                                             ;; delete shared ops.
+  
+#+end_src 
+
+** API uses IDs and Nothing Else
+
+Ensure the API uses IDs and passing the wrong type signals
+an error. This behavior helps end users avoid having 
+(delete-car my-actual-object) somewhere deep in their code that's
+acting like a no-op.
+
+#+name: api-uses-ids-and-nothing-else
+#+begin_src lisp
+  (deftest api-uses-ids-and-nothing-else ()
+    (let ((car1  (make-automobile 'gas-auto :model "gas"))
+          (op (make-instance 'tire-change)))
+
+      ;; Perform and Make-automobile use the actual objects.
+      ;; Rest of API uses IDs.
+      ;; Rationale: Operation doesn't exist until performed,
+      ;; Thus perform method should save it.
+      ;; And we'd be DB backed, so it makes sense to 
+      ;; pass IDs rather than objects.
+      (finishes (perform op car1)) 
+
+      (signals type-error (get-car car1))
+      (finishes (get-car (id car1)))
+
+      (signals type-error (operations-on car1))
+      (finishes (operations-on (id car1)))
+
+      (signals type-error (delete-automobile car1))
+      (signals type-error (delete-automobile "string"))
+      (signals type-error (delete-automobile 'car1))
+      (finishes (delete-automobile (id car1)))))
+#+end_src 
+
+* Application
+
+#+ATTR_LaTeX: width=3cm
+#+begin_src ditaa :file application.png :cmdline -r
+  +----------------+ 
+  |                | 
+  | 1. Data Model  | 
+  |                | 
+  +-------+--------+ 
+          |          
+          V          
+  +-------+--------+
+  |                |
+  | 2. Application |
+  | cRED           |
+  +----------------+
+#+end_src
+
+The application provides HTTP service using [[http://weitz.de/hunchentoot/][hunchentoot]]. [[http://common-lisp.net/project/slime/][Slime]] is also started.
+The web service is just a simple RESTful thing.  The first page is the index.
+
+#+name: index-page
+#+begin_src lisp
+   (defun print-car-row (stream car)
+     (with-html-output (stream stream)
+       (:tr 
+        (:td (:a :href (format nil "/delete?id=~a" (id car))
+                 "X") "&nbsp;&nbsp;&nbsp;")
+        (:td (:a :href (format nil "/car?id=~a" (id car))
+                 (str (class-name (class-of car)))))
+        (:td (str (model car)))
+        (:td (str (year car)))
+        (:td (str (odometer car))))))
+   
+   (define-easy-handler (index :uri "/") ()
+     (with-html-output-to-string (stream nil :prologue t)
+       (:html 
+        (:head (:title "Auto-Maintenance"))
+        (:body 
+         (:h1 "Auto-Maintenance")
+         (:p "Welcome to auto maintenance.")
+         (:hr)
+         (:h2 "Add New Car")
+         (:form :method "post" :action "/newcar"
+           (:dl (:dt (:label :for "model"    "Model"))
+                (:dd (:input :type "text" :name "model"))
+  
+                (:dt (:label :for "year"     "Year")) 
+                (:dd (:input :type "text" :name "year"))
+  
+                (:dt (:label :for "odometer" "Odometer")) 
+                (:dd (:input :type "text" :name "odometer"))
+  
+                (:dt (:label :for "type" "type")
+                     (:dd
+                      (:input :type "radio" :id "gas" :name "type"
+                              :value "GAS-AUTO" :checked "t") 
+                      (:label :for "gas" "Gas") (:br)
+   
+                      (:input :type "radio" :id "electric" 
+                              :name "type" :value "ELECTRIC-AUTO") 
+                      (:label :for "electric" "Electric") (:br)
+   
+                      (:input :type "radio" :id "diesel" 
+                              :name "type" :value "DIESEL-AUTO")
+                      (:label :for "diesel" "Diesel") (:br))))
+           (:input :type "submit"))
+         (:p "The following cars are defined:")
+         (:table
+          (:thead (:tr (:th) (:th "Type") (:th "Model")
+                       (:th "Year") (:th "Odometer")))
+          (:tbody (dolist (car (all-cars))
+                    (print-car-row stream car))))))))
+   
+#+end_src lisp
+
+To make the form work, we need a postback handler. 
+
+#+name: add-car-postback
+#+begin_src lisp
+  (define-easy-handler (newcar :uri "/newcar")
+      ((model :init-form "Unnamed"  :parameter-type 'string)
+       (year                        :parameter-type 'integer)
+       (Odometer                    :parameter-type 'integer)
+       (type  :init-form "GAS-AUTO" :parameter-type 'string))
+    (make-automobile (find-symbol type :data-model)
+                     :model model :year year :odometer odometer)
+    (redirect "/"))
+#+end_src
+
+This URL can delete cars.
+
+#+name: delete-car
+#+begin_src lisp
+  (define-easy-handler (deletecar :uri "/delete")
+      ((id :parameter-type 'integer))
+    (and id (delete-automobile id))
+    (redirect "/"))
+#+end_src
+
+While this one can view them, and let you delete or add operations to the vehicle.
+
+#+name: view-car
+#+begin_src lisp
+  (define-easy-handler (viewcar :uri "/car")
+      ((id  :parameter-type 'integer)
+       (msg :parameter-type 'string))
+    (unless id (redirect "/"))
+    (let ((car (get-car id)))
+      (with-html-output-to-string (stream nil :prologue t)
+        (:html 
+         (:head (:title "Auto-Maintenance"))
+         (:body 
+          (:h1 "Car " (str id) ": " (str (class-name (class-of car))))
+          (when msg (htm (:b (esc (url-decode msg)))))
+          (:hr)
+          (:a :href "/" "back") (:br)
+          (:h2 "Operations")
+          (:a :href (format nil "/oilchange?id=~d" id) "Oil Change") (:br)
+          (:a :href (format nil "/tirechange?id=~d" id) "Tire Change") (:br)
+          (:br)          
+          (:ol (dolist (op (operations-on (id car)))
+                 (htm (:li (:a :href (format nil "/delete-operation?id=~d&car=~d"
+                                             (id op) (id car)) "X") 
+                           "&nbsp;&nbsp;"
+                           (esc (princ-to-string op)))))))))))
+  
+  (defun do-operation (op car)
+    (url-encode (with-output-to-string (*standard-output*)
+                  (handler-case (perform op car)
+                    (error (e) (princ e))))))
+  
+  (define-easy-handler (oilchange :uri "/oilchange")
+      ((id :parameter-type 'integer))
+    (unless id (redirect "/"))
+    (let* ((car (get-car id))
+           (msg (do-operation (make-instance 'oil-change) car)))
+      (redirect (format nil "/car?id=~d&msg=~a" id msg))))
+  
+  (define-easy-handler (tirechange :uri "/tirechange")
+      ((id :parameter-type 'integer))
+    (unless id (redirect "/"))
+    (let* ((car (get-car id))
+           (msg (do-operation (make-instance 'tire-change) car)))
+      (redirect (format nil "/car?id=~d&msg=~a" id msg))))
+    
+#+end_src
+
+And one last URL to delete an operation.
+
+#+name: delete-operation
+#+begin_src lisp
+  (define-easy-handler (del-operation :uri "/delete-operation")
+      ((id  :parameter-type 'integer)
+       (car :parameter-type 'integer))
+    (when id (delete-operation id))
+    (redirect (if car (format nil "/car?id=~d&msg=operation%20deleted" car) "/")))
+#+end_src
+
+* start.lisp
+
+To hasten deployment, this program downloads its external dependencies. This is done using two lisp packages:
+
+  * [[http://common-lisp.net/~mmommer/asdf-howto.shtml][ASDF]] :: 'A System Definition Facilty.' lets me express package interdependencies like you might find in a makefile.
+  * [[http://www.quicklisp.org/beta/][Quicklisp]] :: A program for fetching Lisp packages from the internet.
+
+This is bootstrapping. Because we have nothing, we can't start calling ASDF or QUICKLOAD methods (because they don't exist).
+Every function call requires us to first locate the function in the newly loaded package and then call it.
+
+In C# or Java, you'd reach for reflection libraries and a bottle of Aspirin. Lisp offers us an easy way:  Because the compiler is ever-present, we can compile new code at runtime rather
+than write code that does lookup-then-call behavior.  And that's what the *eval* statements are doing.
+
+Finally, we jump into our read program start point, safe in the knowledge that all dependencies have been met.
+
+#+name: start
+#+begin_src lisp
+  (format t "~%Downloading required dependencies...~%")
+  
+  ;; Load quicklisp
+  (load "quicklisp" :if-does-not-exist :error)
+  (eval `(handler-bind ((error
+                         #'(lambda (e)
+                             (declare (ignore e))
+                             (invoke-restart 'quicklisp-quickstart::load-setup))))
+           (quicklisp-quickstart::install)))
+  
+  ;; Now that it's ready, use ASDF to load our program, 
+  ;; and quicklisp to download missing dependencies.
+  (eval `(handler-bind ((asdf::missing-dependency
+                         #'(lambda (e)
+                             (quicklisp:quickload (slot-value e 'asdf::requires))
+                             (invoke-restart 'asdf::retry))))
+           (asdf:oos 'asdf:load-op :auto-maintenance)))
+  
+  (format t "~%All dependencies loaded... Running program.")
+  (funcall (find-symbol "MAIN" :auto-maintenance))
+#+end_src 
+
+The file, test.lisp, is pretty identical to this one. Except it runs the tests and quits.
+
+* License
+
+auto-maintenance is distributed under the [[http://opensource.org/licenses/lgpl-2.1.php][LGPL2]] License. 
+
+* Tangles							   :NOEXPORT:
+** Copyright
+#+name: copyright
+#+begin_src lisp 
+;;; Copyright (c) 2012, Warren Wilkinson.  All rights reserved.
+
+;;; BEGIN_LICENSE:LGPL2
+;;;
+;;; This library is free software: you can redistribute it and/or modify
+;;; it under the terms of the GNU Library General Public License as published by
+;;; the Free Software Foundation; version 2.
+;;;
+;;; This library is distributed in the hope that it will be useful,
+;;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;; GNU Library General Public License for more details.
+;;;
+;;; You should have received a copy of the GNU Library General Public License
+;;; along with this library; see the file COPYING.LIB.  If not, write to
+;;; the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+;;; Boston, MA 02110-1301, USA.
+;;;
+;;; END_LICENSE
+#+end_src 
+
+** start.lisp
+#+begin_src lisp :tangle ../start.lisp :noweb yes
+  ;;; -*- Mode: LISP; Syntax: COMMON-LISP;  Base: 10 -*-
+      
+  <<copyright>>
+  
+  <<start>>
+#+end_src 
+** test.lisp
+#+begin_src lisp :tangle ../test.lisp :noweb yes
+  ;;; -*- Mode: LISP; Syntax: COMMON-LISP;  Base: 10 -*-
+  (format t "~%Downloading required dependencies...~%")
+  
+  ;; Load quicklisp
+  (load "quicklisp" :if-does-not-exist :error)
+  (eval `(handler-bind ((error
+                         #'(lambda (e)
+                             (declare (ignore e))
+                             (invoke-restart 'quicklisp-quickstart::load-setup))))
+           (quicklisp-quickstart::install)))
+  
+  ;; Now that it's ready, use ASDF to load our program, 
+  ;; and quicklisp to download missing dependencies.
+  (eval `(handler-bind ((asdf::missing-dependency
+                         #'(lambda (e)
+                             (quicklisp:quickload (slot-value e 'asdf::requires))
+                             (invoke-restart 'asdf::retry))))
+           (asdf:oos 'asdf:test-op :data-model)))
+  (quit)
+#+end_src 
+
+** auto-maintenance/auto-maintenance.asd
+
+#+begin_src lisp :tangle ../auto-maintenance/auto-maintenance.asd :noweb yes
+  ;;; -*- Mode: LISP; Syntax: COMMON-LISP;  Base: 10 -*-
+    
+  <<copyright>>
+    
+  (defsystem :auto-maintenance
+    :name "auto-maintenance"
+    :version "1.0.0"
+    :author "Warren Wilkinson <warrenwilkinson@gmail.com>"
+    :license "lgpl2"
+    :description "A program for car maintenance"
+    :depends-on (:data-model :hunchentoot :cl-who :swank)
+    :components ((:file "main"))
+    :in-order-to ((test-op (load-op auto-maintenance.test))))
+#+end_src
+
+** auto-maintenance/main.lisp
+#+begin_src lisp :tangle ../auto-maintenance/main.lisp :noweb yes
+  ;;; -*- Mode: LISP; Syntax: COMMON-LISP; package: auto-maintenance; Base: 10 -*-
+    
+  <<copyright>>
+  
+  (defpackage :auto-maintenance
+    (:use :common-lisp :data-model :cl-who :hunchentoot)
+    (:export main))
+  
+  (in-package :auto-maintenance)
+  
+  (defvar *swank-server*)
+  (defvar *hunchentoot-server*)
+
+  <<index-page>>
+
+  <<add-car-postback>>
+
+  <<delete-car>>
+ 
+  <<view-car>>
+
+  <<delete-operation>>      
+  
+  (defun main () 
+    (format t "~%Starting Auto Maintenance...")
+    
+    (format t "~%  1. Starting Swank (port: 4005, coding system: utf-8-unix)...")
+    (setf *swank-server* (swank:create-server :dont-close t :port 4005 :coding-system "utf-8-unix"))
+    
+    (format t "~%  2. Starting Hunchentoot (port: 8080)...")
+    (setf *hunchentoot-server* (hunchentoot:start (make-instance 'hunchentoot:easy-acceptor :port 8080)))
+    
+    (format t "~%Welcome to Auto Maintenance!~%"))
+#+end_src
+
+** data-model/data-model.asd
+
+#+begin_src lisp :tangle ../data-model/data-model.asd :noweb yes
+  ;;; -*- Mode: LISP; Syntax: COMMON-LISP;  Base: 10 -*-
+    
+  <<copyright>>
+    
+  (defsystem :data-model
+    :name "data model"
+    :version "1.0.0"
+    :author "Warren Wilkinson <warrenwilkinson@gmail.com>"
+    :license "lgpl2"
+    :description "The data-model built for the test."
+    :components ((:file "data-model"))
+    :in-order-to ((test-op (load-op data-model.test))))
+  
+  (defsystem :data-model.test
+    :name "data-model tests"
+    :version "1.0.0"
+    :author "Warren Wilkinson <warrenwilkinson@gmail.com>"
+    :description "Testing code for the data-model package."
+    :licence "LGPL2"
+    :depends-on (:fiveam :data-model)
+    :components ((:file "test")))
+  
+  (defmethod perform ((op asdf:test-op) (system (eql (find-system :data-model))))
+    (funcall (intern "RUN-TESTS" :data-model.test)))
+#+end_src
+
+** data-model/data-model.lisp
+#+begin_src lisp :tangle ../data-model/data-model.lisp :noweb yes
+  ;;; -*- Mode: LISP; Syntax: COMMON-LISP;  Base: 10 -*-
+    
+  <<copyright>>
+  
+  (defpackage :data-model
+     (:use :common-lisp)
+     (:export perform automobile gas-auto electric-auto diesel-auto operation oil-change tire-change
+              all-cars get-car make-automobile delete-automobile operations-on delete-operation
+              id model year odometer))
+  
+  (in-package :data-model)
+   
+  <<automobile>>
+   
+  <<operation>> 
+  
+  (defvar *operations* (make-hash-table))
+   
+  <<around-operation>>
+  
+  <<more-api>>
+#+end_src
+
+** data-model/test.lisp
+#+begin_src lisp :tangle ../data-model/test.lisp :noweb yes
+  ;;; -*- Mode: LISP; Syntax: COMMON-LISP;  Base: 10 -*-
+      
+  <<copyright>>
+    
+  (defpackage :data-model.test
+    (:use :common-lisp :data-model :fiveam)
+    (:shadow deftest)
+    (:export run-tests))
+  
+  (in-package :data-model.test)
+  
+  (def-suite data-model-suite :description "The example test suite.")
+  (in-suite data-model-suite)
+  
+  ;; Our deftest makes *operations* a new hash table for the duration
+  ;; of the tests.
+  (defmacro deftest (name &rest code)
+    `(test ,name 
+           (let ((data-model::*operations* (make-hash-table)))
+             (declare (special *operations*))
+             ,@code)))
+  
+  <<can-create-vehicles>>
+  
+  <<can-get-vehicle-by-id>>
+  
+  <<can-delete-vehicle>>
+  
+  <<can-perform-operation>>
+  
+  <<can-not-gas-electric-car>>
+  
+  <<can-delete-operation>>
+  
+  <<deleting-car-deletes-operations>>
+
+  <<api-uses-ids-and-nothing-else>>
+  
+  (defun run-tests () (run! 'data-model-suite))
+       
+#+end_src
+
+* Stuff To Do							   :NOEXPORT:
+** TODO Get a github account place to put this on.
+https://github.com/WarrenWilkinson/changed-stream
+** TODO Populate the getting support part.
+
+** TODO Make it main source Tanglable
+** TODO Write appropriate copyright header.
+** TODO Tangle and ASDF load
+** TODO Put version number in this file.
+** TODO Grab ASD descriptions from this file.
+
+** TODO Rename changed-stream.tests to changed-stream.test
+
+** TODO Publish this as HTML and make it the projects webpage.
+** TODO package and release.
+*** TODO Get an ebuild done.
+*** WAITING Get it onto quicklisp.
+*** TODO Get integration with cl-test-grid
+https://github.com/cl-test-grid/cl-test-grid
+
+
